@@ -1,9 +1,10 @@
-# 🤖 Telegram Private Chatbot (v4.0) [🇺🇸 English](README_EN.md) | [🇨🇳 简体中文](README.md)
+# 🤖 Telegram Private Chatbot (v4.0) 
 
 [![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/jikssha/telegram_private_chatbot)
 ![GitHub stars](https://img.shields.io/github/stars/jikssha/telegram_private_chatbot?style=social)
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 [![Telegram](https://img.shields.io/badge/Telegram-DM-blue?style=social&logo=telegram)](https://t.me/vaghr_wegram_bot)
+[🇺🇸 English](README_EN.md) | [🇨🇳 简体中文](README.md)
 
 **Telegram Private Chatbot** 是一个基于 **Cloudflare Workers** 的高性能 Telegram 双向私聊机器人。它专为解决 Telegram 上的垃圾广告骚扰而生，拥有 0 延迟的本地人机验证系统、强大的管理员指令集以及无缝的消息转发体验。
 
