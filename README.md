@@ -1,4 +1,4 @@
-# 🤖 Telegram Private Chatbot (v4.0)
+# 🤖 Telegram Private Chatbot (v4.0) [🇺🇸 English](README_EN.md) | [🇨🇳 简体中文](README.md)
 
 [![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/jikssha/telegram_private_chatbot)
 ![GitHub stars](https://img.shields.io/github/stars/jikssha/telegram_private_chatbot?style=social)
