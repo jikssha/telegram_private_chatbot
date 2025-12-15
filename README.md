@@ -12,6 +12,23 @@
 
 ---
 
+<details open>
+<summary><strong>📢 最新更新 (v4.2)：安全升级 & 功能增强</strong></summary>
+<br>
+
+> **⚠️ 注意：本次更新包含阻断性变更 (Breaking Change)**
+
+1. **🛡️ 强制 Username 检查**
+   - 为防止垃圾账号滥用，私聊逻辑现已增加强制检查。
+   - **未设置用户名 (`@username`) 的用户将被拦截**，并收到要求设置的提示。
+   
+2. **👤 `/info` 指令增强**
+   - 管理员查询用户信息时，现支持显示用户的 **完整姓名 (Full Name)**。
+
+👉 **Fork 用户请点击仓库上方的 `Sync fork` 按钮获取最新代码。**
+</details>
+---
+
 ## 📑 目录 (Table of Contents)
 
 * [✨ 核心特性](#-核心特性)
