@@ -1,6 +1,9 @@
-// Cloudflare Worker：Telegram 双向机器人 (纯本地极速版 v4.0)
+// Cloudflare Worker：Telegram 双向机器人 (纯本地极速版 v4.2)
+// 修改内容：
+// 1. 私聊逻辑增加 Username 强制检查，未设置则拦截。
+// 2. /info 指令增加显示用户的完整姓名 (Full Name)。
 
-// --- 本地题库 (14条) ---
+// --- 1. 本地题库配置 (14条) ---
 const LOCAL_QUESTIONS = [
     {"question": "冰融化后会变成什么？", "correct_answer": "水", "incorrect_answers": ["石头", "木头", "火"]},
     {"question": "正常人有几只眼睛？", "correct_answer": "2", "incorrect_answers": ["1", "3", "4"]},
@@ -20,7 +23,7 @@ const LOCAL_QUESTIONS = [
 
 export default {
   async fetch(request, env, ctx) {
-    // 环境自检 
+    // --- 2. 环境自检 ---
     if (!env.TOPIC_MAP) return new Response("Error: KV 'TOPIC_MAP' not bound.");
     if (!env.BOT_TOKEN) return new Response("Error: BOT_TOKEN not set.");
     if (!env.SUPERGROUP_ID) return new Response("Error: SUPERGROUP_ID not set.");
@@ -34,6 +37,9 @@ export default {
       return new Response("OK");
     }
 
+    // --- 3. 路由分发 ---
+
+    // A. 处理按钮回调
     if (update.callback_query) {
       await handleCallbackQuery(update.callback_query, env, ctx);
       return new Response("OK");
@@ -44,6 +50,7 @@ export default {
 
     ctx.waitUntil(flushExpiredMediaGroups(env, Date.now()));
 
+    // B. 处理私聊消息
     if (msg.chat && msg.chat.type === "private") {
       try {
         await handlePrivateMessage(msg, env, ctx);
@@ -55,6 +62,7 @@ export default {
       return new Response("OK");
     }
 
+    // C. 处理群组消息
     const supergroupId = Number(env.SUPERGROUP_ID);
     if (msg.chat && Number(msg.chat.id) === supergroupId) {
         if (msg.forum_topic_closed && msg.message_thread_id) {
@@ -81,14 +89,27 @@ async function handlePrivateMessage(msg, env, ctx) {
   const userId = msg.chat.id;
   const key = `user:${userId}`;
 
-  // 拦截普通用户发送的指令
+  // 1. 过滤掉非 /start 的指令
   if (msg.text && msg.text.startsWith("/") && msg.text.trim() !== "/start") {
       return; 
   }
 
+  // 2. 检查黑名单
   const isBanned = await env.TOPIC_MAP.get(`banned:${userId}`);
   if (isBanned) return; 
 
+  // [新增] 2.1 强制检查 Username 是否存在
+  // 如果 msg.from.username 为空或 undefined，直接中断并提示
+  if (!msg.from.username) {
+      await tgCall(env, "sendMessage", {
+          chat_id: userId,
+          text: "⚠️ **很抱歉,你的用户名(username)未设置,无法进行人机验证流程!消息发送失败!**\n\n(请在 Telegram 设置中配置用户名后重试)",
+          parse_mode: "Markdown"
+      });
+      return;
+  }
+
+  // 3. 检查验证状态
   const verified = await env.TOPIC_MAP.get(`verified:${userId}`);
   
   if (!verified) {
@@ -98,6 +119,7 @@ async function handlePrivateMessage(msg, env, ctx) {
     return;
   }
 
+  // 4. 已验证用户，转发消息
   await forwardToTopic(msg, userId, key, env, ctx);
 }
 
@@ -158,7 +180,6 @@ async function handleAdminReply(msg, env, ctx) {
   const threadId = msg.message_thread_id;
   const text = (msg.text || "").trim();
   
-  // 反查 UserId
   let userId = null;
   const list = await env.TOPIC_MAP.list({ prefix: "user:" });
   for (const { name } of list.keys) {
@@ -169,10 +190,9 @@ async function handleAdminReply(msg, env, ctx) {
       }
   }
 
-  // 如果找不到用户，说明可能是在普通话题，或者数据丢失，直接返回
   if (!userId) return; 
 
-  // --- 指令区域 ---
+  // --- 管理员指令区域 ---
 
   if (text === "/close") {
       const key = `user:${userId}`;
@@ -222,13 +242,23 @@ async function handleAdminReply(msg, env, ctx) {
       return;
   }
 
+  // [修改] /info 指令逻辑：增加显示 Full Name
   if (text === "/info") {
-      const info = `👤 **用户信息**\nUID: \`${userId}\`\nTopic ID: \`${threadId}\`\nLink: [点击私聊](tg://user?id=${userId})`;
+      const chatInfo = await tgCall(env, "getChat", { chat_id: userId });
+      const r = chatInfo.result || {};
+
+      // 1. 获取 Username
+      const username = r.username ? `@${r.username}` : "未设置";
+      
+      // 2. [新增] 获取 Full Name (First + Last)
+      const fullName = (r.first_name + " " + (r.last_name || "")).trim();
+      
+      const info = `👤 **用户信息**\nUID: \`${userId}\`\nName: \`${fullName}\`\nUsername: \`${username}\`\nTopic ID: \`${threadId}\`\nLink: [点击私聊](tg://user?id=${userId})`;
+      
       await tgCall(env, "sendMessage", { chat_id: env.SUPERGROUP_ID, message_thread_id: threadId, text: info, parse_mode: "Markdown" });
       return;
   }
 
-  // 转发管理员消息给用户
   if (msg.media_group_id) {
     await handleMediaGroup(msg, env, ctx, { direction: "t2p", targetChat: userId, threadId: null });
     return;
@@ -236,10 +266,9 @@ async function handleAdminReply(msg, env, ctx) {
   await tgCall(env, "copyMessage", { chat_id: userId, from_chat_id: env.SUPERGROUP_ID, message_id: msg.message_id });
 }
 
-// ---------------- 验证模块 (纯本地) ----------------
+// ---------------- 验证模块 ----------------
 
 async function sendVerificationChallenge(userId, env, pendingMsgId) {
-    // 直接从本地题库随机
     const q = LOCAL_QUESTIONS[Math.floor(Math.random() * LOCAL_QUESTIONS.length)];
     const challenge = {
         question: q.question,
@@ -247,9 +276,7 @@ async function sendVerificationChallenge(userId, env, pendingMsgId) {
         options: shuffleArray([...q.incorrect_answers, q.correct_answer])
     };
 
-    // 使用 8 位短 ID 防止按钮失效
     const verifyId = Math.random().toString(36).substring(2, 10);
-    
     const state = { ans: challenge.correct, pending: pendingMsgId };
     await env.TOPIC_MAP.put(`chal:${verifyId}`, JSON.stringify(state), { expirationTtl: 300 });
 
@@ -298,7 +325,6 @@ async function handleCallbackQuery(query, env, ctx) {
         if (userAns === state.ans) {
             await tgCall(env, "answerCallbackQuery", { callback_query_id: query.id, text: "✅ 验证通过" });
             
-            // 30天有效期
             await env.TOPIC_MAP.put(`verified:${userId}`, "1", { expirationTtl: 2592000 });
             await env.TOPIC_MAP.delete(`chal:${verifyId}`);
 
